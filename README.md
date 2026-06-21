@@ -16,7 +16,7 @@ Anyone downloading this repository from GitHub can install the compiler globally
 
 ### Step 1: Clone the Repository
 ```bash
-git clone [https://github.com/your_username/OMlang-Compiler.git](https://github.com/your_username/OMlang-Compiler.git)
+git clone https://github.com/Kiran-mondal/OMlang-Compiler.git
 cd OMlang-Compiler
 om run workspace.om
 om build workspace.om --target python
