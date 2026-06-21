@@ -31,36 +31,43 @@ class OmCompiler:
                 py_code.append("    " * indent + line)
                 continue
 
-            tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|\+|-|\*|/|=|<|>|==|!=', line)
+            # NEW REGEX: Match strings in quotes OR match numbers/words/operators
+            tokens = re.findall(r'"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|\+|-|\*|/|=|<|>|==|!=', line)
             if not tokens:
                 continue
 
             cmd = tokens[0]
 
+            # Variable Declaration: set x = 10
             if cmd == "set" and len(tokens) >= 4 and tokens[2] == "=":
                 var_name = tokens[1]
-                expr = "".join(tokens[3:])
+                expr = " ".join(tokens[3:])
                 py_code.append("    " * indent + f"{var_name} = {expr}")
 
+            # Print Output: show "hello"
             elif cmd == "show":
-                expr = "".join(tokens[1:])
+                expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"print({expr})")
 
+            # Conditional Logic: if x > 5
             elif cmd == "if":
-                expr = "".join(tokens[1:])
+                expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"if {expr}:")
                 indent += 1
 
+            # Alternative Condition: else
             elif cmd == "else":
                 indent -= 1
                 py_code.append("    " * indent + "else:")
                 indent += 1
 
+            # Loop/Repeat Logic: repeat 5
             elif cmd == "repeat":
-                expr = "".join(tokens[1:])
+                expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"for _ in range(int({expr})):")
                 indent += 1
 
+            # Block Scope Ending: end
             elif cmd == "end":
                 indent -= 1
                 if indent < 0:
