@@ -2,8 +2,9 @@ import sys
 import os
 import re
 import math
+import time  # Imported for high-precision execution benchmarking
 
-OM_VERSION = "v2.7.2-Tokenizer-Fixed"
+OM_VERSION = "v2.8.0-Timed-Execution"
 
 def smart_input(prompt=""):
     """Automatically converts user input into text or numerical types."""
@@ -39,24 +40,20 @@ class OmCompiler:
         in_object_block = False
 
         for idx, line in enumerate(self.lines):
-            # Handle empty lines or comments
             if not line or line.startswith('#'):
                 py_code.append("    " * indent + line)
                 continue
 
-            # FIXED TOKENIZER: Added comma (,) support at the very end of the regex pattern
             tokens = re.findall(r'"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|==|!=|<=|>=|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|\+|-|\*|/|=|<|>|,', line)
             if not tokens:
                 continue
 
             cmd = tokens[0]
 
-            # 1. Output handling (show)
             if cmd == "show":
                 expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"print({expr})")
 
-            # 2. Object Blueprint Block Definition
             elif cmd == "object":
                 if len(tokens) < 2:
                     print(f"Syntax Error (Line {idx+1}): Object class name is missing.")
@@ -66,7 +63,6 @@ class OmCompiler:
                 indent += 1
                 in_object_block = True
 
-            # 3. Custom Functions & Object Methods (fn)
             elif cmd == "fn":
                 if len(tokens) < 2:
                     print(f"Syntax Error (Line {idx+1}): Function name is missing.")
@@ -84,13 +80,11 @@ class OmCompiler:
                 py_code.append("    " * indent + f"def {func_name}({args}):")
                 indent += 1
 
-            # 4. Conditionals (if)
             elif cmd == "if":
                 expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"if {expr}:")
                 indent += 1
 
-            # 5. Multi-conditionals (elif)
             elif cmd == "elif":
                 indent -= 1
                 if indent < 0:
@@ -100,7 +94,6 @@ class OmCompiler:
                 py_code.append("    " * indent + f"elif {expr}:")
                 indent += 1
 
-            # 6. Alternative block (else)
             elif cmd == "else":
                 indent -= 1
                 if indent < 0:
@@ -109,24 +102,20 @@ class OmCompiler:
                 py_code.append("    " * indent + "else:")
                 indent += 1
 
-            # 7. Fixed Loops (repeat)
             elif cmd == "repeat":
                 expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"for _ in range(int({expr})):")
                 indent += 1
 
-            # 8. Dynamic Loops (while)
             elif cmd == "while":
                 expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"while {expr}:")
                 indent += 1
 
-            # 9. Function Return Handling
             elif cmd == "return":
                 expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"return {expr}")
 
-            # 10. Scope terminator (end)
             elif cmd == "end":
                 indent -= 1
                 if indent < 0:
@@ -135,7 +124,6 @@ class OmCompiler:
                 if indent == 0:
                     in_object_block = False
 
-            # 11. Global expressions, Variable assignments & Object assignments
             else:
                 modified_line = line.replace("input(", "smart_input()").replace("input ", "smart_input ")
                 
@@ -153,7 +141,7 @@ class OmCompiler:
         return "\n".join(py_code)
 
     def run(self):
-        """Executes OM code with its own unique native libraries and objects injected."""
+        """Executes OM code and profiles exact runtime duration automatically."""
         py_source = self.transpile_to_python()
         
         global_context = {
@@ -167,18 +155,31 @@ class OmCompiler:
             'range': range,
             'round': round,
             'abs': abs,
-            
-            # --- OMlang Unique Native Library Functions ---
             'om_root': math.sqrt,
             'om_power': math.pow,
             'om_pi': math.pi,
             'om_system_os': os.name,
             'om_current_dir': os.getcwd
         }
+        
+        # Capture precise clock tick right before execution starts
+        start_time = time.perf_counter()
+        
         try:
             exec(py_source, global_context)
         except Exception as e:
             print(f"Runtime Error: {e}")
+            
+        # Capture precise clock tick right after execution finishes
+        end_time = time.perf_counter()
+        
+        # Calculate full elapsed duration in milliseconds
+        execution_ms = (end_time - start_time) * 1000
+        
+        # Clean runtime footer block display
+        print("\n" + "-" * 40)
+        print(f"OMlang Runtime: {execution_ms:.2f} ms")
+        print("-" * 40)
 
     def transpile_only(self, target):
         if target == "python":
