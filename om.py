@@ -1,11 +1,12 @@
 import sys
 import os
 import re
+import math
 
-OM_VERSION = "v2.0.0-Master"
+OM_VERSION = "v2.6.0-Intermediate"
 
 def smart_input(prompt=""):
-    """Automatically converts user input into text or numbers"""
+    """Automatically converts user input into text or numerical types."""
     val = input(prompt)
     try:
         if '.' in val:
@@ -32,7 +33,7 @@ class OmCompiler:
             sys.exit(1)
 
     def transpile_to_python(self):
-        """Transpiles Om code into a final and powerful Python code"""
+        """Transpiles OM source code into executable Python code with unique native functions."""
         py_code = []
         indent = 0
 
@@ -42,56 +43,92 @@ class OmCompiler:
                 py_code.append("    " * indent + line)
                 continue
 
-            # Token analysis (supports all types of mathematical and logical symbols)
+            # Tokenizer supporting symbols, strings, and alphanumerics
             tokens = re.findall(r'"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|\+|-|\*|/|=|<|>|==|!=|<=|>=', line)
             if not tokens:
                 continue
 
             cmd = tokens[0]
 
-            # 1. Om language's signature 'show' keyword (Output)
+            # 1. Output handling (show)
             if cmd == "show":
                 expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"print({expr})")
 
-            # 2. Conditional block (if)
+            # 2. Conditionals (if)
             elif cmd == "if":
                 expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"if {expr}:")
                 indent += 1
 
-            # 3. Alternative conditional block (else)
+            # 3. Multi-conditionals (elif)
+            elif cmd == "elif":
+                indent -= 1
+                if indent < 0:
+                    print(f"Syntax Error (Line {idx+1}): Unexpected 'elif' keyword.")
+                    sys.exit(1)
+                expr = " ".join(tokens[1:])
+                py_code.append("    " * indent + f"elif {expr}:")
+                indent += 1
+
+            # 4. Alternative block (else)
             elif cmd == "else":
                 indent -= 1
+                if indent < 0:
+                    print(f"Syntax Error (Line {idx+1}): Unexpected 'else' keyword.")
+                    sys.exit(1)
                 py_code.append("    " * indent + "else:")
                 indent += 1
 
-            # 4. Loop block (repeat)
+            # 5. Fixed Loops (repeat)
             elif cmd == "repeat":
                 expr = " ".join(tokens[1:])
                 py_code.append("    " * indent + f"for _ in range(int({expr})):")
                 indent += 1
 
-            # 5. End of block (end)
+            # 6. Dynamic Loops (while)
+            elif cmd == "while":
+                expr = " ".join(tokens[1:])
+                py_code.append("    " * indent + f"while {expr}:")
+                indent += 1
+
+            # 7. Custom Functions (fn)
+            elif cmd == "fn":
+                if len(tokens) < 2:
+                    print(f"Syntax Error (Line {idx+1}): Function name is missing.")
+                    sys.exit(1)
+                func_name = tokens[1]
+                args = ", ".join(tokens[2:])
+                py_code.append("    " * indent + f"def {func_name}({args}):")
+                indent += 1
+
+            # 8. Function Return Handling
+            elif cmd == "return":
+                expr = " ".join(tokens[1:])
+                py_code.append("    " * indent + f"return {expr}")
+
+            # 9. Scope terminator (end)
             elif cmd == "end":
                 indent -= 1
                 if indent < 0:
                     print(f"Syntax Error (Line {idx+1}): Unexpected 'end' keyword.")
                     sys.exit(1)
 
-            # 6. Global expressions (Variables, math, input, and Python functions)
+            # 10. Global expressions & Variable handling
             else:
-                # Convert input function to smart input
-                modified_line = line.replace("input(", "smart_input(").replace("input ", "smart_input ")
+                modified_line = line.replace("input(", "smart_input()").replace("input ", "smart_input ")
                 py_code.append("    " * indent + modified_line)
+
+        if indent != 0:
+            print("Syntax Error: Missing 'end' keyword somewhere in your code.")
+            sys.exit(1)
 
         return "\n".join(py_code)
 
     def run(self):
-        """Run code flawlessly without any banner"""
+        """Executes OM code with its own unique native libraries injected into the ecosystem."""
         py_source = self.transpile_to_python()
         
-        # Useful Python built-in functions are provided here for the convenience of new users
         global_context = {
             'print': print,
             'input': smart_input,
@@ -102,7 +139,14 @@ class OmCompiler:
             'len': len,
             'range': range,
             'round': round,
-            'abs': abs
+            'abs': abs,
+            
+            # --- OMlang Unique Native Library Functions ---
+            'om_root': math.sqrt,
+            'om_power': math.pow,
+            'om_pi': math.pi,
+            'om_system_os': os.name,
+            'om_current_dir': os.getcwd
         }
         try:
             exec(py_source, global_context)
@@ -136,4 +180,3 @@ def cli():
 
 if __name__ == "__main__":
     cli()
-    
