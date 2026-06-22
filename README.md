@@ -42,21 +42,28 @@ end
 ```
 ---
 
-### 💡 What Else Do You Need to Make This Work?
-For the `pip install -e .` command to magically set up the `om` command inside Windows CMD, Linux, or Termux, you just need to make sure the **`setup.py`** file we discussed earlier is also uploaded to your `OMlang-Compiler` repository. 
+## 🚀 Om Language Syntax & Function Guide
+To keep the Om language completely simple and clean, the following keywords and built-in functions are used:
+### 1. Core Keywords
+| Keyword | Description | Example |
+|---|---|---|
+| **show** | Used to display any text or output on the screen (Signature Feature). | show "Hello, World!" 
+ show total |
+| **input** | Used to take dynamic input from the user in the terminal. | age = input("Enter age: ") |
+| **if** | Used to start a conditional block. | if score >= 80 |
+| **else** | Used to run alternative code if the condition is false. | else |
+| **repeat** | Used to loop or repeat code a specific number of times. | repeat 5 |
+| **end** | Used to terminate any conditional block (if-else) or loop (repeat). | end |
+### 2. Smart Built-in Functions
+Our language directly supports these useful Python functions in the backend:
+ * **len(variable)** : Used to find the total number of characters or length of a text.
+   * *Example:* show len("Om") (will show output 2)
+ * **round(variable)** : Used to round a decimal number to its nearest integer.
+   * *Example:* show round(10.6) (will show output 11)
+ * **abs(variable)** : Used to convert any negative number into a positive number (Absolute Value).
+   * *Example:* show abs(-5) (will show output 5)
+ * **str(), int(), float()** : Used to explicitly change data types (Type Casting) when needed.
+### 3. Mathematical & Logical Symbols (Operators)
+ * **Math Operators:** + (Addition), - (Subtraction), * (Multiplication), / (Division).
+ * **Logical Operators:** == (Equal to), != (Not equal to), >, <, >=, <=.
 
-Here is the exact `setup.py` layout to keep in your directory:
-
-```python
-from setuptools import setup
-
-setup(
-    name="om-lang",
-    version="1.2.0",
-    py_modules=["om"],
-    entry_points={
-        'console_scripts': [
-            'om=om:cli',
-        ],
-    },
-)
