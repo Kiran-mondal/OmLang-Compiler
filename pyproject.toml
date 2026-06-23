@@ -15,5 +15,10 @@ classifiers = [
     "Development Status :: 4 - Beta"
 ]
 
+[tool.setuptools]
+# SCIENTIFIC FIX: Maps the physical 'om-core' disk folder to a safe import namespace
+package-dir = {"om_core" = "om-core"}
+packages = ["om_core"]
+
 [project.scripts]
-om = "main:main_entry"
+om = "om_core.main:main_entry"
