@@ -28,7 +28,7 @@ except ImportError:
     go = None
     px = None
 
-OM_VERSION = "v3.6.0-Bracket-Array-Support"
+OM_VERSION = "v3.6.1-Robust-DS-Fallbacks"
 
 # =====================================================================
 # 1. THE LEXER
@@ -343,7 +343,6 @@ class OmParser:
                 self.consume(TokenType.RPAREN)
             return InputNode()
         elif t.type == TokenType.LBRACKET:
-            # Safely group linear list elements into a unified block literal
             val = "["
             self.consume(TokenType.LBRACKET)
             while self.current_token.type != TokenType.RBRACKET and self.current_token.type != TokenType.EOF:
@@ -444,7 +443,7 @@ def smart_input(prompt=""):
         return val
 
 def build_missing_dependency_hook(lib_name):
-    return lambda *args, **kwargs: print(f"Runtime Error: Engine component framework reference '{lib_name}' is not installed.")
+    return lambda *args, **kwargs: print(f"Runtime Error: Engine dependency framework packet '{lib_name}' is not installed locally.")
 
 class OmCompiler:
     def __init__(self, filename):
@@ -478,9 +477,16 @@ class OmCompiler:
             'round': round, 'abs': abs,
         }
 
-        # Safe dynamic runtime mapping evaluation structures
-        if np: global_context['om_numpy_array'] = lambda d: np.array(d)
-        if pd: global_context['om_pandas_dataframe'] = lambda d: pd.DataFrame(d)
+        # Explicit fallback triggers for NumPy & Pandas
+        if np:
+            global_context['om_numpy_array'] = lambda d: np.array(d)
+        else:
+            global_context['om_numpy_array'] = build_missing_dependency_hook('numpy')
+
+        if pd:
+            global_context['om_pandas_dataframe'] = lambda d: pd.DataFrame(d)
+        else:
+            global_context['om_pandas_dataframe'] = build_missing_dependency_hook('pandas')
 
         if sns and plt:
             global_context.update({
@@ -521,4 +527,4 @@ def cli():
 
 if __name__ == "__main__":
     cli()
-        
+            
