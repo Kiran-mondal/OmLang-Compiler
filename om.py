@@ -3,7 +3,28 @@ import os
 import math
 import time
 
-OM_VERSION = "v3.3.0-English-Core-Libs"
+# Safely catch missing third-party dependencies during core compiler initialization
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+
+try:
+    import polars as pl
+except ImportError:
+    pl = None
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
+OM_VERSION = "v3.4.0-DataScience-Libs"
 
 # =====================================================================
 # 1. THE LEXER (Strictly English Keywords & Standard Identifiers)
@@ -44,17 +65,10 @@ class TokenType:
     GTE = ">="
 
 ENGLISH_KEYWORDS = {
-    "show": TokenType.SHOW,
-    "input": TokenType.INPUT,
-    "if": TokenType.IF,
-    "elif": TokenType.ELIF,
-    "else": TokenType.ELSE,
-    "end": TokenType.END,
-    "while": TokenType.WHILE,
-    "repeat": TokenType.REPEAT,
-    "fn": TokenType.FN,
-    "object": TokenType.OBJECT,
-    "return": TokenType.RETURN
+    "show": TokenType.SHOW, "input": TokenType.INPUT, "if": TokenType.IF,
+    "elif": TokenType.ELIF, "else": TokenType.ELSE, "end": TokenType.END,
+    "while": TokenType.WHILE, "repeat": TokenType.REPEAT, "fn": TokenType.FN,
+    "object": TokenType.OBJECT, "return": TokenType.RETURN
 }
 
 class Token:
@@ -115,14 +129,11 @@ class OmLexer:
                     self.advance()
                 return Token(TokenType.NUMBER, val, self.line_num)
 
-            # Strictly parsing standard ASCII English alphanumeric sequences
             if self.current_char.isalpha() or self.current_char == '_':
                 val = ""
                 while self.current_char is not None and (self.current_char.isalnum() or self.current_char == '_'):
                     val += self.current_char
                     self.advance()
-                
-                # Enforce clean case-insensitivity on standard keywords
                 lower_val = val.lower()
                 t_type = ENGLISH_KEYWORDS.get(lower_val, TokenType.IDENTIFIER)
                 return Token(t_type, val if t_type == TokenType.IDENTIFIER else lower_val, self.line_num)
@@ -169,7 +180,7 @@ class OmLexer:
         return Token(TokenType.EOF, None, self.line_num)
 
 # =====================================================================
-# 2. THE PARSER (Assembles trees & supports explicit Library Calls)
+# 2. THE PARSER (Assembles nodes & tracks Data Science Expressions)
 # =====================================================================
 class ASTNode: pass
 class ProgramNode(ASTNode):
@@ -344,7 +355,7 @@ class OmParser:
             node = self.expr()
             self.consume(TokenType.RPAREN)
             return node
-        self.error(f"Unexpected math or string factor '{t.value}'")
+        self.error(f"Unexpected math or data element token '{t.value}'")
 
 # =====================================================================
 # 3. CODE GENERATOR
@@ -406,7 +417,7 @@ class OmGenerator:
             return "\n".join(lines)
 
 # =====================================================================
-# 4. RUNTIME ENVIRONMENT & ENGLISH SYSTEM LIBRARIES
+# 4. RUNTIME SYSTEM & THIRD-PARTY LIBRARY ENGINES
 # =====================================================================
 def smart_input(prompt=""):
     val = input(prompt)
@@ -415,6 +426,10 @@ def smart_input(prompt=""):
         return int(val)
     except ValueError:
         return val
+
+# Standardized error-handling fallbacks for missing environment modules
+def build_missing_dependency_hook(lib_name):
+    return lambda *args, **kwargs: print(f"Runtime Error: Library environment reference package '{lib_name}' is not installed.")
 
 class OmCompiler:
     def __init__(self, filename):
@@ -441,27 +456,51 @@ class OmCompiler:
         generator = OmGenerator()
         py_source = generator.generate(ast)
         
-        # English-exclusive global context with clean library spaces
+        # Build evaluation contexts dynamically based on active system package components
         global_context = {
             'print': print,
             'smart_input': smart_input,
             'int': int, 'float': float, 'str': str, 'len': len,
             'round': round, 'abs': abs,
-            
-            # --- Library: om_math ---
-            'om_math_sqrt': math.sqrt,
-            'om_math_pow': math.pow,
-            'om_math_abs': math.fabs,
-            'om_math_pi': lambda: math.pi,
-            
-            # --- Library: om_sys ---
-            'om_sys_platform': lambda: sys.platform,
-            'om_sys_cwd': os.getcwd,
-            
-            # --- Library: om_time ---
-            'om_time_now': time.time,
-            'om_time_sleep': time.sleep
         }
+
+        # --- NumPy Integration Hub (`om_numpy`) ---
+        if np:
+            global_context.update({
+                'om_numpy_array': lambda data: np.array(data),
+                'om_numpy_zeros': lambda shape: np.zeros(shape),
+                'om_numpy_mean': lambda arr: np.mean(arr)
+            })
+        else:
+            global_context['om_numpy_array'] = build_missing_dependency_hook('numpy')
+
+        # --- Pandas Integration Hub (`om_pandas`) ---
+        if pd:
+            global_context.update({
+                'om_pandas_dataframe': lambda dict_data: pd.DataFrame(dict_data),
+                'om_pandas_read_csv': lambda path: pd.read_csv(path)
+            })
+        else:
+            global_context['om_pandas_dataframe'] = build_missing_dependency_hook('pandas')
+
+        # --- Polars Integration Hub (`om_polars`) ---
+        if pl:
+            global_context.update({
+                'om_polars_dataframe': lambda dict_data: pl.DataFrame(dict_data),
+                'om_polars_read_csv': lambda path: pl.read_csv(path)
+            })
+        else:
+            global_context['om_polars_dataframe'] = build_missing_dependency_hook('polars')
+
+        # --- PyTorch Integration Hub (`om_torch`) ---
+        if torch:
+            global_context.update({
+                'om_torch_tensor': lambda data: torch.tensor(data),
+                'om_torch_rand': lambda *shape: torch.rand(*shape),
+                'om_torch_cuda_available': lambda: torch.cuda.is_available()
+            })
+        else:
+            global_context['om_torch_tensor'] = build_missing_dependency_hook('torch')
         
         start_time = time.perf_counter()
         try:
@@ -482,4 +521,3 @@ def cli():
 
 if __name__ == "__main__":
     cli()
-            
