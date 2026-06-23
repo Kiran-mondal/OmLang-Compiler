@@ -28,7 +28,7 @@ except ImportError:
     go = None
     px = None
 
-OM_VERSION = "v3.6.1-Robust-DS-Fallbacks"
+OM_VERSION = "v3.7.0-Professional-Student-Edition"
 
 # =====================================================================
 # 1. THE LEXER
@@ -185,6 +185,7 @@ class OmLexer:
 
         return Token(TokenType.EOF, None, self.line_num)
 
+
 # =====================================================================
 # 2. THE PARSER
 # =====================================================================
@@ -203,14 +204,27 @@ class NumNode(ASTNode):
     def __init__(self, val): self.val = val
 class StringNode(ASTNode):
     def __init__(self, val): self.val = val
+class ListNode(ASTNode):
+    def __init__(self, elements): self.elements = elements
 class InputNode(ASTNode): pass
 class CallNode(ASTNode):
     def __init__(self, name, args): self.name = name; self.args = args
+class ReturnNode(ASTNode):
+    def __init__(self, expr): self.expr = expr
 
 class IfNode(ASTNode):
     def __init__(self, condition, body, o_elifs, o_else):
         self.condition = condition; self.body = body
         self.elifs = o_elifs; self.else_body = o_else
+
+class WhileNode(ASTNode):
+    def __init__(self, condition, body):
+        self.condition = condition; self.body = body
+
+class FnNode(ASTNode):
+    def __init__(self, name, params, body):
+        self.name = name; self.params = params; self.body = body
+
 
 class OmParser:
     def __init__(self, lexer):
@@ -246,6 +260,17 @@ class OmParser:
             
         elif t.type == TokenType.IF:
             return self.parse_if_block()
+
+        elif t.type == TokenType.WHILE:
+            return self.parse_while_block()
+
+        elif t.type == TokenType.FN:
+            return self.parse_function_block()
+
+        elif t.type == TokenType.RETURN:
+            self.consume(TokenType.RETURN)
+            expr = self.expr() if self.current_token.type not in (TokenType.END, TokenType.EOF) else None
+            return ReturnNode(expr)
             
         elif t.type == TokenType.IDENTIFIER:
             name = t.value
@@ -300,6 +325,39 @@ class OmParser:
         self.consume(TokenType.END)
         return IfNode(cond, if_body, elifs, else_body)
 
+    def parse_while_block(self):
+        self.consume(TokenType.WHILE)
+        cond = self.expr()
+        body = []
+        while self.current_token.type not in (TokenType.END, TokenType.EOF):
+            s = self.statement()
+            if s: body.append(s)
+        self.consume(TokenType.END)
+        return WhileNode(cond, body)
+
+    def parse_function_block(self):
+        self.consume(TokenType.FN)
+        name = self.current_token.value
+        self.consume(TokenType.IDENTIFIER)
+        
+        self.consume(TokenType.LPAREN)
+        params = []
+        if self.current_token.type == TokenType.IDENTIFIER:
+            params.append(self.current_token.value)
+            self.consume(TokenType.IDENTIFIER)
+            while self.current_token.type == TokenType.COMMA:
+                self.consume(TokenType.COMMA)
+                params.append(self.current_token.value)
+                self.consume(TokenType.IDENTIFIER)
+        self.consume(TokenType.RPAREN)
+        
+        body = []
+        while self.current_token.type not in (TokenType.END, TokenType.EOF):
+            s = self.statement()
+            if s: body.append(s)
+        self.consume(TokenType.END)
+        return FnNode(name, params, body)
+
     def expr(self):
         return self.comparison()
 
@@ -343,14 +401,15 @@ class OmParser:
                 self.consume(TokenType.RPAREN)
             return InputNode()
         elif t.type == TokenType.LBRACKET:
-            val = "["
             self.consume(TokenType.LBRACKET)
-            while self.current_token.type != TokenType.RBRACKET and self.current_token.type != TokenType.EOF:
-                val += str(self.current_token.value)
-                self.consume(self.current_token.type)
-            val += "]"
+            elements = []
+            if self.current_token.type != TokenType.RBRACKET:
+                elements.append(self.expr())
+                while self.current_token.type == TokenType.COMMA:
+                    self.consume(TokenType.COMMA)
+                    elements.append(self.expr())
             self.consume(TokenType.RBRACKET)
-            return VarNode(val)
+            return ListNode(elements)
         elif t.type == TokenType.IDENTIFIER:
             name = t.value
             self.consume(TokenType.IDENTIFIER)
@@ -371,6 +430,7 @@ class OmParser:
             self.consume(TokenType.RPAREN)
             return node
         self.error(f"Unexpected grammar factor construction layout token '{t.value}'")
+
 
 # =====================================================================
 # 3. CODE GENERATOR
@@ -410,6 +470,13 @@ class OmGenerator:
             
         elif isinstance(node, StringNode):
             return f'"{node.val}"'
+
+        elif isinstance(node, ListNode):
+            elems = ", ".join(self.generate(e) for e in node.elements)
+            return f"[{elems}]"
+
+        elif isinstance(node, ReturnNode):
+            return f"{spacing}return {self.generate(node.expr) if node.expr else ''}"
             
         elif isinstance(node, IfNode):
             lines = [f"{spacing}if {self.generate(node.condition)}:"]
@@ -430,6 +497,24 @@ class OmGenerator:
                 self.indent_level -= 1
                 
             return "\n".join(lines)
+
+        elif isinstance(node, WhileNode):
+            lines = [f"{spacing}while {self.generate(node.condition)}:"]
+            self.indent_level += 1
+            for s in node.body: lines.append(self.generate(s))
+            self.indent_level -= 1
+            return "\n".join(lines)
+
+        elif isinstance(node, FnNode):
+            params = ", ".join(node.params)
+            lines = [f"{spacing}def {node.name}({params}):"]
+            self.indent_level += 1
+            if not node.body:
+                lines.append(f"{spacing}    pass")
+            for s in node.body: lines.append(self.generate(s))
+            self.indent_level -= 1
+            return "\n".join(lines)
+
 
 # =====================================================================
 # 4. RUNTIME SYSTEM
@@ -477,54 +562,4 @@ class OmCompiler:
             'round': round, 'abs': abs,
         }
 
-        # Explicit fallback triggers for NumPy & Pandas
-        if np:
-            global_context['om_numpy_array'] = lambda d: np.array(d)
-        else:
-            global_context['om_numpy_array'] = build_missing_dependency_hook('numpy')
-
-        if pd:
-            global_context['om_pandas_dataframe'] = lambda d: pd.DataFrame(d)
-        else:
-            global_context['om_pandas_dataframe'] = build_missing_dependency_hook('pandas')
-
-        if sns and plt:
-            global_context.update({
-                'om_seaborn_lineplot': lambda x, y: sns.lineplot(x=x, y=y),
-                'om_seaborn_scatterplot': lambda x, y: sns.scatterplot(x=x, y=y),
-                'om_seaborn_barplot': lambda x, y: sns.barplot(x=x, y=y),
-                'om_seaborn_show': lambda: plt.show(),
-                'om_seaborn_style': lambda style: sns.set_theme(style=style)
-            })
-        else:
-            global_context['om_seaborn_lineplot'] = build_missing_dependency_hook('seaborn/matplotlib')
-
-        if px and go:
-            global_context.update({
-                'om_plotly_line': lambda x, y, title: px.line(x=x, y=y, title=title).show(),
-                'om_plotly_scatter': lambda x, y, title: px.scatter(x=x, y=y, title=title).show(),
-                'om_plotly_bar': lambda x, y, title: px.bar(x=x, y=y, title=title).show()
-            })
-        else:
-            global_context['om_plotly_line'] = build_missing_dependency_hook('plotly')
-        
-        start_time = time.perf_counter()
-        try:
-            exec(py_source, global_context)
-        except Exception as e:
-            print(f"Runtime Error: {e}")
-            
-        end_time = time.perf_counter()
-        execution_ms = (end_time - start_time) * 1000
-        print(f"\n----------------------------------------\nOMlang Runtime: {execution_ms:.2f} ms\n----------------------------------------")
-
-def cli():
-    if len(sys.argv) < 3 or sys.argv[1] != "run":
-        print("Om CLI Usage: om run <filename.om>")
-        return
-    compiler = OmCompiler(sys.argv[2])
-    compiler.run()
-
-if __name__ == "__main__":
-    cli()
-            
+        # Setup standard custom global h
