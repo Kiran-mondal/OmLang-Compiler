@@ -1,14 +1,22 @@
 # =====================================================================
-# MODULE: main.py (PRODUCTION CLI ENGINE DRIVER)
+# MODULE: om-core/main.py (UNIVERSAL PATH CLI DRIVER)
 # =====================================================================
 import sys
 import os
 
-from opcodes import OpCode
-from lexer import OmLexer, TokenType
-from parser import OmParser
-from compiler import OmBytecodeCompiler
-from vm import OmVirtualMachine
+# Robust import layer that completely ignores the physical folder name
+try:
+    from .opcodes import OpCode
+    from .lexer import OmLexer, TokenType
+    from .parser import OmParser
+    from .compiler import OmBytecodeCompiler
+    from .vm import OmVirtualMachine
+except (ImportError, SyntaxError, ValueError):
+    from opcodes import OpCode
+    from lexer import OmLexer, TokenType
+    from parser import OmParser
+    from compiler import OmBytecodeCompiler
+    from vm import OmVirtualMachine
 
 def execute_file_pipeline(filepath):
     if not os.path.exists(filepath):
@@ -44,7 +52,6 @@ def show_help_menu():
     print("  om version             | Displays system version data")
     print("==================================================")
 
-# This is the function pip hooks into directly
 def main_entry():
     if len(sys.argv) < 2:
         show_help_menu()
@@ -64,6 +71,5 @@ def main_entry():
         print(f"CLI Error: Unknown operation token '{command}' entered.")
         show_help_menu()
 
-# Allows running via python main.py directly as well
 if name == "main":
     main_entry()
