@@ -3,10 +3,10 @@ import os
 import math
 import time
 
-OM_VERSION = "v3.0.0-AST-Core"
+OM_VERSION = "v3.2.0-Std-Libraries"
 
 # =====================================================================
-# 1. THE LEXER (Tokenizes the source text smoothly)
+# 1. THE LEXER (With Multi-Language Tokens)
 # =====================================================================
 class TokenType:
     EOF = "EOF"
@@ -43,18 +43,23 @@ class TokenType:
     LTE = "<="
     GTE = ">="
 
-KEYWORDS = {
-    "show": TokenType.SHOW,
-    "input": TokenType.INPUT,
-    "if": TokenType.IF,
-    "elif": TokenType.ELIF,
-    "else": TokenType.ELSE,
-    "end": TokenType.END,
-    "while": TokenType.WHILE,
-    "repeat": TokenType.REPEAT,
-    "fn": TokenType.FN,
-    "object": TokenType.OBJECT,
-    "return": TokenType.RETURN
+MULTILINGUAL_KEYWORDS = {
+    # English
+    "show": TokenType.SHOW, "input": TokenType.INPUT, "if": TokenType.IF,
+    "elif": TokenType.ELIF, "else": TokenType.ELSE, "end": TokenType.END,
+    "while": TokenType.WHILE, "repeat": TokenType.REPEAT, "fn": TokenType.FN,
+    "return": TokenType.RETURN, "object": TokenType.OBJECT,
+    
+    # Hindi (हिन्दी)
+    "दिखाओ": TokenType.SHOW, "पूछो": TokenType.INPUT, "अगर": TokenType.IF,
+    "यानी": TokenType.ELIF, "वरना": TokenType.ELSE, "खत्म": TokenType.END,
+    "जबतक": TokenType.WHILE, "दोहराओ": TokenType.REPEAT, "कार्य": TokenType.FN,
+    "वापस": TokenType.RETURN,
+    
+    # Bengali (বাংলা)
+    "দেখাও": TokenType.SHOW, "জিজ্ঞেস": TokenType.INPUT, "যদি": TokenType.IF,
+    "অথবা": TokenType.ELIF, "নাহলে": TokenType.ELSE, "শেষ": TokenType.END,
+    "যতক্ষণ": TokenType.WHILE, "পুনরাবৃত্তি": TokenType.REPEAT
 }
 
 class Token:
@@ -115,14 +120,13 @@ class OmLexer:
                     self.advance()
                 return Token(TokenType.NUMBER, val, self.line_num)
 
-            if self.current_char.isalpha() or self.current_char == '_':
+            if self.current_char.isalpha() or self.current_char == '_' or ord(self.current_char) > 127:
                 val = ""
-                while self.current_char is not None and (self.current_char.isalnum() or self.current_char == '_'):
+                while self.current_char is not None and (self.current_char.isalnum() or self.current_char == '_' or ord(self.current_char) > 127):
                     val += self.current_char
                     self.advance()
-                lower_val = val.lower()
-                t_type = KEYWORDS.get(lower_val, TokenType.IDENTIFIER)
-                return Token(t_type, val if t_type == TokenType.IDENTIFIER else lower_val, self.line_num)
+                t_type = MULTILINGUAL_KEYWORDS.get(val, TokenType.IDENTIFIER)
+                return Token(t_type, val, self.line_num)
 
             if self.current_char == '=':
                 self.advance()
@@ -166,7 +170,7 @@ class OmLexer:
         return Token(TokenType.EOF, None, self.line_num)
 
 # =====================================================================
-# 2. THE PARSER (Builds structural trees from logic)
+# 2. THE PARSER (With Functional and Variable Library Lookups)
 # =====================================================================
 class ASTNode: pass
 class ProgramNode(ASTNode):
@@ -184,6 +188,8 @@ class NumNode(ASTNode):
 class StringNode(ASTNode):
     def __init__(self, val): self.val = val
 class InputNode(ASTNode): pass
+class CallNode(ASTNode):
+    def __init__(self, name, args): self.name = name; self.args = args
 
 class IfNode(ASTNode):
     def __init__(self, condition, body, o_elifs, o_else):
@@ -228,6 +234,19 @@ class OmParser:
         elif t.type == TokenType.IDENTIFIER:
             name = t.value
             self.consume(TokenType.IDENTIFIER)
+            
+            # Catching function execution calls from libraries
+            if self.current_token.type == TokenType.LPAREN:
+                self.consume(TokenType.LPAREN)
+                args = []
+                if self.current_token.type != TokenType.RPAREN:
+                    args.append(self.expr())
+                    while self.current_token.type == TokenType.COMMA:
+                        self.consume(TokenType.COMMA)
+                        args.append(self.expr())
+                self.consume(TokenType.RPAREN)
+                return CallNode(name, args)
+                
             self.consume(TokenType.ASSIGN)
             val = self.expr()
             return AssignNode(name, val)
@@ -309,8 +328,19 @@ class OmParser:
                 self.consume(TokenType.RPAREN)
             return InputNode()
         elif t.type == TokenType.IDENTIFIER:
+            name = t.value
             self.consume(TokenType.IDENTIFIER)
-            return VarNode(t.value)
+            if self.current_token.type == TokenType.LPAREN:
+                self.consume(TokenType.LPAREN)
+                args = []
+                if self.current_token.type != TokenType.RPAREN:
+                    args.append(self.expr())
+                    while self.current_token.type == TokenType.COMMA:
+                        self.consume(TokenType.COMMA)
+                        args.append(self.expr())
+                self.consume(TokenType.RPAREN)
+                return CallNode(name, args)
+            return VarNode(name)
         elif t.type == TokenType.LPAREN:
             self.consume(TokenType.LPAREN)
             node = self.expr()
@@ -319,7 +349,7 @@ class OmParser:
         self.error(f"Unexpected math or string factor '{t.value}'")
 
 # =====================================================================
-# 3. CODE GENERATOR (Converts our AST into executable Python safely)
+# 3. CODE GENERATOR
 # =====================================================================
 class OmGenerator:
     def __init__(self):
@@ -340,6 +370,10 @@ class OmGenerator:
             
         elif isinstance(node, InputNode):
             return "smart_input()"
+            
+        elif isinstance(node, CallNode):
+            args = ", ".join(self.generate(a) for a in node.args)
+            return f"{spacing}{node.name}({args})"
             
         elif isinstance(node, BinOpNode):
             return f"({self.generate(node.left)} {node.op} {self.generate(node.right)})"
@@ -374,7 +408,7 @@ class OmGenerator:
             return "\n".join(lines)
 
 # =====================================================================
-# 4. RUNTIME SYSTEM ENVIRONMENT SETUP
+# 4. RUNTIME SYSTEM & BUILT-IN LIBRARIES
 # =====================================================================
 def smart_input(prompt=""):
     val = input(prompt)
@@ -409,11 +443,25 @@ class OmCompiler:
         generator = OmGenerator()
         py_source = generator.generate(ast)
         
+        # Mapping specialized, multi-lingual mathematical and system library functions
         global_context = {
             'print': print,
             'smart_input': smart_input,
             'int': int, 'float': float, 'str': str, 'len': len,
-            'round': round, 'abs': abs, 'math': math
+            'round': round, 'abs': abs,
+            
+            # --- Library 1: Core Mathematics (गणित / গণিত) ---
+            'om_वर्गमूल': math.sqrt,    'om_sqrt': math.sqrt,
+            'om_घातांक': math.pow,     'om_pow': math.pow,
+            'om_पाई': math.pi,         'om_pi': math.pi,
+            
+            # --- Library 2: System Environment (सिस्टम) ---
+            'om_प्रणाली': lambda: os.name, 'om_os': lambda: os.name,
+            'om_मार्ग': os.getcwd,          'om_cwd': os.getcwd,
+            
+            # --- Library 3: Time Tracking (समय) ---
+            'om_समय戳': time.time,      'om_timestamp': time.time,
+            'om_सो जाओ': time.sleep,     'om_sleep': time.sleep
         }
         
         start_time = time.perf_counter()
@@ -435,4 +483,4 @@ def cli():
 
 if __name__ == "__main__":
     cli()
-        
+                
