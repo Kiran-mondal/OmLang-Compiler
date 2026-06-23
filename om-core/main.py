@@ -5,7 +5,7 @@ import sys
 import os
 
 # NATIVE FIX: Inject this folder directly into the path to clear import blocks
-sys.path.insert(0, os.path.dirname(os.path.abspath(file)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Now clean, standard imports work perfectly everywhere
 from opcodes import OpCode
